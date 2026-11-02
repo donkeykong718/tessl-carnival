@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   boothInReach,
+  borderTrees,
   canStand,
   createVisitors,
   createWalker,
@@ -11,10 +12,13 @@ import {
   layoutMidway,
   pathToBooth,
   seededRandom,
+  STRING_LIGHT_HEIGHT,
+  stringLightBulbs,
   toScreen,
   toTile,
   updateVisitor,
   walk,
+  type Bulb,
 } from './world';
 
 describe('layoutMidway', () => {
@@ -179,5 +183,53 @@ describe('visitors', () => {
       expect(isBlocked(map, Math.floor(visitor.x), Math.floor(visitor.y))).toBe(false);
       expect(visitor.stride).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('stringLightBulbs', () => {
+  it('hangs bulbs along both rows of border trees', () => {
+    const map = layoutMidway(['water-cannon']);
+    const bulbs = stringLightBulbs(map);
+    const back = bulbs.filter((b) => b.row === 'back');
+    const left = bulbs.filter((b) => b.row === 'left');
+    expect(back.length).toBeGreaterThan(0);
+    expect(left.length).toBeGreaterThan(0);
+    expect(back.length + left.length).toBe(bulbs.length);
+  });
+
+  it('follows the tree rows, out past the hedge', () => {
+    const map = layoutMidway(['water-cannon']);
+    for (const bulb of stringLightBulbs(map)) {
+      if (bulb.row === 'back') {
+        expect(bulb.y).toBeGreaterThanOrEqual(-2.4);
+        expect(bulb.y).toBeLessThanOrEqual(-1.4);
+        expect(bulb.x).toBeGreaterThan(0);
+        expect(bulb.x).toBeLessThan(map.width);
+      } else {
+        expect(bulb.x).toBeGreaterThanOrEqual(-2.4);
+        expect(bulb.x).toBeLessThanOrEqual(-1.4);
+        expect(bulb.y).toBeGreaterThan(0);
+        expect(bulb.y).toBeLessThan(map.height);
+      }
+    }
+  });
+
+  it('runs from tree to tree, drooping between them', () => {
+    const map = layoutMidway(['water-cannon']);
+    const trees = borderTrees(map);
+    const back = stringLightBulbs(map).filter((b) => b.row === 'back');
+    expect(back[0].x).toBeGreaterThan(trees.back[0].x);
+    expect(back.at(-1)!.x).toBeLessThan(trees.back.at(-1)!.x);
+    for (let i = 1; i < back.length; i++) expect(back[i].x).toBeGreaterThan(back[i - 1].x);
+    for (const bulb of back) expect(bulb.z).toBeLessThan(STRING_LIGHT_HEIGHT);
+  });
+
+  it('adds bulbs as the midway grows', () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `game-${i}`);
+    const small = stringLightBulbs(layoutMidway(ids.slice(0, 1)));
+    const big = stringLightBulbs(layoutMidway(ids));
+    const left = (bulbs: Bulb[]) => bulbs.filter((b) => b.row === 'left').length;
+    expect(big.length).toBeGreaterThan(small.length);
+    expect(left(big)).toBeGreaterThan(left(small));
   });
 });

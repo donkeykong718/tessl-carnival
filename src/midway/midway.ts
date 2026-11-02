@@ -5,13 +5,16 @@ import {
   boothBounds,
   drawArch,
   drawBooth,
+  drawBoothSign,
   drawBunting,
   drawCloud,
   drawFloaters,
   drawFrontHedge,
   drawField,
   drawGroundLayer,
+  drawNight,
   drawProp,
+  drawStringLights,
   drawWalker,
   groundBounds,
   HORIZON,
@@ -33,6 +36,7 @@ import {
   inputDirection,
   layoutMidway,
   pathToBooth,
+  stringLightBulbs,
   strollTiles,
   toScreen,
   toTile,
@@ -49,11 +53,15 @@ export interface MidwayOptions {
   onPlay(gameId: string): void;
   /** Called whenever the booth in reach changes. */
   onReach(booth: BoothSlot | undefined): void;
+  /** Called whenever the midway switches between day and night. */
+  onNight?(night: boolean): void;
 }
 
 export interface MidwayControls {
   /** Walks the player to a game's booth. */
   walkTo(gameId: string): void;
+  /** Switches between day and night. */
+  toggleNight(): void;
   stop(): void;
 }
 
@@ -110,6 +118,12 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
   let nextFloater = 2;
   let inReach: BoothSlot | undefined;
   let destination: Point | undefined;
+  const bulbs = stringLightBulbs(map);
+  let night = false;
+  const toggleNight = () => {
+    night = !night;
+    options.onNight?.(night);
+  };
 
   let dpr = 1;
   /** Drops below 1 on machines too slow to keep up, trading sharpness for speed. */
@@ -159,6 +173,9 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     } else if (PLAY_KEYS.has(event.code) && !isControl(event.target) && inReach?.gameId) {
       event.preventDefault();
       play(inReach);
+    } else if (event.code === 'KeyN' && !isControl(event.target)) {
+      event.preventDefault();
+      toggleNight();
     }
   };
   const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
@@ -264,15 +281,19 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     // The sky, and clouds drifting slowly behind the midway.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const horizon = (HORIZON - camera.y) * zoom;
-    const sky = ctx.createLinearGradient(0, horizon - 260 * zoom, 0, horizon);
-    sky.addColorStop(0, palette.skyHigh);
-    sky.addColorStop(1, palette.sky);
-    ctx.fillStyle = sky;
+    if (night) {
+      ctx.fillStyle = palette.nightSky;
+    } else {
+      const sky = ctx.createLinearGradient(0, horizon - 260 * zoom, 0, horizon);
+      sky.addColorStop(0, palette.skyHigh);
+      sky.addColorStop(1, palette.sky);
+      ctx.fillStyle = sky;
+    }
     ctx.fillRect(0, 0, canvas.clientWidth, Math.max(0, horizon + 2));
 
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, 0, 0);
     const span = view.w + 200;
-    for (const cloud of clouds) {
+    for (const cloud of night ? [] : clouds) {
       const x =
         ((((cloud.x * span - camera.x * 0.3 + (calm ? 0 : t * cloud.speed)) % span) + span) %
           span) -
@@ -309,6 +330,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
         );
       }
     }
+
+    drawStringLights(ctx, map, bulbs, night);
 
     if (destination && player.path.length > 0) {
       const p = toScreen(Math.floor(destination.x) + 0.5, Math.floor(destination.y) + 0.5);
@@ -348,6 +371,7 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     };
 
     type Drawable = { depth: number; box: Box; draw: () => void };
+    const signs: (() => void)[] = [];
     const drawables: Drawable[] = [
       ...visitors.map((v) => ({
         depth: v.x + v.y,
@@ -367,6 +391,11 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
         ? () => drawBooth(ctx, booth, name, t, booth === inReach)
         : () => drawProp(ctx, prop!, t);
       drawables.push({ depth, box, draw: () => faded(box, depth, paint) });
+      if (booth) {
+        signs.push(() =>
+          faded(box, depth, () => drawBoothSign(ctx, booth, name, t, booth === inReach)),
+        );
+      }
     }
     drawables
       .filter((d) => onScreen(d.box))
@@ -377,6 +406,12 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     if (onScreen(archBounds(map))) faded(archBounds(map), Infinity, () => drawArch(ctx, map, t));
     drawBunting(ctx, map, t, visible);
     drawFloaters(ctx, floaters);
+
+    if (night) {
+      drawNight(ctx, map, bulbs, visible, t, calm ? 0 : 0.25);
+      // Booth names go back on top of the night, so they stay readable.
+      for (const sign of signs) sign();
+    }
 
     // The prompt over the booth in reach, at full resolution.
     if (inReach?.gameId) {
@@ -440,6 +475,7 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
       const booth = map.booths.find((b) => b.gameId === gameId);
       if (booth) walkToBooth(booth);
     },
+    toggleNight,
     stop() {
       cancelAnimationFrame(frame);
       observer.disconnect();

@@ -14,6 +14,17 @@ export const palette = {
   cloudShade: '#94d8f4',
   haze: '#5fc3b8',
 
+  nightSky: '#05040c',
+  nightWash: 'rgba(8, 6, 24, 0.6)',
+  bulbUnlit: '#9aa3a8',
+  bulbLit: '#ffe6a3',
+  wire: '#3a3530',
+  /** The warm light the string lights cast at night, from strongest to none. */
+  glow: 'rgba(255, 196, 120, 0.9)',
+  glowNear: 'rgba(255, 168, 82, 0.34)',
+  glowFar: 'rgba(255, 150, 70, 0.16)',
+  glowNone: 'rgba(255, 150, 70, 0)',
+
   grass: '#a5c43a',
   grassDark: '#8aab2a',
   grassEdge: '#7a9a22',
