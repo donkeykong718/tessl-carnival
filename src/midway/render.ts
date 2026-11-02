@@ -2,8 +2,12 @@ import { canvasFont, theme } from '../carnival';
 import bannerUrl from './aidevcon-banner.png';
 import { palette } from './palette';
 import {
+  borderTrees,
   CART_KINDS,
+  stringLightHeight,
+  tileHash,
   toScreen,
+  type Bulb,
   type BoothSlot,
   type MidwayMap,
   type Point,
@@ -229,12 +233,6 @@ function signBoard(
 /** The world-pixel height of the horizon; the field runs off to it. */
 export const HORIZON = -24;
 
-function hash(x: number, y: number, salt = 0): number {
-  let h = (x * 374761393 + y * 668265263 + salt * 2147483647) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
 function rectPoints(r: Rect, lift = 0): Pt[] {
   return [
     at(r.x, r.y, lift),
@@ -302,8 +300,8 @@ export function drawGroundLayer(map: MidwayMap, wanted: number): GroundLayer {
   ctx.beginPath();
   for (let y = 1; y < map.height - 1; y++) {
     for (let x = 1; x < map.width - 1; x++) {
-      if (map.ground[y * map.width + x] !== 'grass' || hash(x, y) > 0.5) continue;
-      const [px, py] = at(x + hash(x, y, 1), y + hash(x, y, 2));
+      if (map.ground[y * map.width + x] !== 'grass' || tileHash(x, y) > 0.5) continue;
+      const [px, py] = at(x + tileHash(x, y, 1), y + tileHash(x, y, 2));
       ctx.moveTo(px - 2, py - 2);
       ctx.lineTo(px, py);
       ctx.lineTo(px + 2, py - 3);
@@ -312,8 +310,8 @@ export function drawGroundLayer(map: MidwayMap, wanted: number): GroundLayer {
   ctx.stroke();
 
   // Trees out in the field behind the midway.
-  for (let i = 0; i < map.width; i += 2) tree(ctx, i + 0.5 + hash(i, 1) * 0.6, -1.4 - hash(i, 2));
-  for (let i = 2; i < map.height; i += 2) tree(ctx, -1.4 - hash(1, i), i + 0.5 + hash(2, i) * 0.6);
+  const trees = borderTrees(map);
+  for (const t of [...trees.back, ...trees.left]) tree(ctx, t.x, t.y);
 
   hedge(ctx, { x: 0, y: 0, w: map.width, h: 1 });
   hedge(ctx, { x: 0, y: 0, w: 1, h: map.height });
@@ -1510,7 +1508,15 @@ function booth(ctx: Ctx, slot: BoothSlot, name: string, t: number, glow: boolean
     scheme.awning,
   );
 
-  // The sign on the roof, with the game's name on it.
+  boothSign(ctx, slot, name, t, glow);
+}
+
+/** The sign on a booth's roof, with the game's name on it. */
+function boothSign(ctx: Ctx, slot: BoothSlot, name: string, t: number, glow: boolean) {
+  const open = slot.gameId !== undefined;
+  const x0 = slot.x + 0.15;
+  const y0 = slot.y + 0.15;
+  const s = 1.7;
   const signAt = at(x0 + s / 2, y0 + s / 2, BOOTH_SIGN_HEIGHT - 6);
   onPlane(ctx, signAt, () => {
     ctx.fillStyle = palette.woodDark;
@@ -1779,6 +1785,138 @@ export function drawProp(ctx: Ctx, prop: Prop, t: number) {
 
 export function drawBooth(ctx: Ctx, slot: BoothSlot, name: string, t: number, glow: boolean) {
   booth(ctx, slot, name, t, glow);
+}
+
+/** Just a booth's sign, drawn again over the night so its name stays readable. */
+export function drawBoothSign(ctx: Ctx, slot: BoothSlot, name: string, t: number, glow: boolean) {
+  boothSign(ctx, slot, name, t, glow);
+}
+
+// ── String lights and night ───────────────────────────────────────────────
+
+/**
+ * The strings of lights hung from tree to tree along both border rows: a
+ * drooping wire with a bulb every so often, dull glass by day and lit by night.
+ */
+export function drawStringLights(ctx: Ctx, map: MidwayMap, bulbs: readonly Bulb[], lit: boolean) {
+  const trees = borderTrees(map);
+  ctx.strokeStyle = palette.wire;
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  for (const row of [trees.back, trees.left]) {
+    for (let i = 0; i + 1 < row.length; i++) {
+      const a = row[i];
+      const b = row[i + 1];
+      for (let k = 0; k <= 8; k++) {
+        const s = k / 8;
+        const [px, py] = at(lerp(a.x, b.x, s), lerp(a.y, b.y, s), stringLightHeight(s));
+        if (k === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+    }
+  }
+  ctx.stroke();
+  ctx.fillStyle = lit ? palette.bulbLit : palette.bulbUnlit;
+  ctx.beginPath();
+  for (const bulb of bulbs) {
+    const [px, py] = at(bulb.x, bulb.y, bulb.z);
+    ctx.moveTo(px + 1.3, py + 1.2);
+    ctx.arc(px, py + 1.2, 1.3, 0, Math.PI * 2);
+  }
+  ctx.fill();
+}
+
+const HALO_RADIUS = 9;
+let haloSprite: HTMLCanvasElement | undefined;
+
+/** One bulb's soft glow, drawn once and stamped round every bulb. */
+function halo(): HTMLCanvasElement {
+  if (haloSprite) return haloSprite;
+  const size = HALO_RADIUS * 2 * 4;
+  haloSprite = document.createElement('canvas');
+  haloSprite.width = size;
+  haloSprite.height = size;
+  const ctx = haloSprite.getContext('2d')!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, palette.glow);
+  g.addColorStop(0.35, palette.glowNear);
+  g.addColorStop(1, palette.glowNone);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return haloSprite;
+}
+
+/** Draws in tile coordinates on the ground, under the camera's transform. */
+function onGround(ctx: Ctx, paint: () => void) {
+  ctx.save();
+  ctx.transform(16, 8, -16, 8, 0, 0);
+  paint();
+  ctx.restore();
+}
+
+/**
+ * Night over the whole midway: a dark wash, then the string lights' warm light
+ * added back on top, brightest by the strings and spreading across the whole
+ * carnival, with a glow round every bulb. `twinkle` is 0 for steady bulbs.
+ */
+export function drawNight(
+  ctx: Ctx,
+  map: MidwayMap,
+  bulbs: readonly Bulb[],
+  view: Box,
+  t: number,
+  twinkle: number,
+) {
+  ctx.fillStyle = palette.nightWash;
+  ctx.fillRect(view.left, view.top, view.right - view.left, view.bottom - view.top);
+
+  ctx.globalCompositeOperation = 'lighter';
+  const { width, height } = map;
+  // The light reaches everything on the ground and the rides above it, but not the sky.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(view.left, HORIZON - 60, view.right - view.left, view.bottom - HORIZON + 60);
+  ctx.clip();
+  onGround(ctx, () => {
+    // Light falling away from each row across the whole midway, never quite to nothing.
+    const fromBack = ctx.createLinearGradient(0, -1.4, 0, height + 2);
+    fromBack.addColorStop(0, palette.glowNear);
+    fromBack.addColorStop(1, palette.glowFar);
+    ctx.fillStyle = fromBack;
+    ctx.fillRect(-20, -20, width + 40, height + 40);
+    const fromLeft = ctx.createLinearGradient(-1.4, 0, width + 2, 0);
+    fromLeft.addColorStop(0, palette.glowNear);
+    fromLeft.addColorStop(1, palette.glowFar);
+    ctx.fillStyle = fromLeft;
+    ctx.fillRect(-20, -20, width + 40, height + 40);
+
+    // Pools of light on the ground under each string, every other bulb apart.
+    for (let i = 0; i < bulbs.length; i += 2) {
+      const { x, y } = bulbs[i];
+      const pool = ctx.createRadialGradient(x, y, 0, x, y, 3.5);
+      pool.addColorStop(0, palette.glowFar);
+      pool.addColorStop(1, palette.glowNone);
+      ctx.fillStyle = pool;
+      ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
+    }
+  });
+  ctx.restore();
+
+  const sprite = halo();
+  bulbs.forEach((bulb, i) => {
+    const [px, py] = at(bulb.x, bulb.y, bulb.z);
+    if (px + HALO_RADIUS < view.left || px - HALO_RADIUS > view.right) return;
+    ctx.globalAlpha = 1 - twinkle * (0.5 + 0.5 * Math.sin(t * 3 + i * 2.3));
+    ctx.drawImage(
+      sprite,
+      px - HALO_RADIUS,
+      py + 1.2 - HALO_RADIUS,
+      HALO_RADIUS * 2,
+      HALO_RADIUS * 2,
+    );
+  });
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 /** A rounded callout with a line of text, pointing down at a screen point. */

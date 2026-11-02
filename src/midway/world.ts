@@ -228,6 +228,69 @@ export function layoutMidway(gameIds: readonly string[]): MidwayMap {
   };
 }
 
+/** A small stable hash of a tile position to [0, 1), for scenery that looks random but stays put. */
+export function tileHash(x: number, y: number, salt = 0): number {
+  let h = (x * 374761393 + y * 668265263 + salt * 2147483647) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+export type TreeRow = 'back' | 'left';
+
+/**
+ * The two rows of trees out in the field: one along the back edge and one
+ * down the left side, each in order along the row.
+ */
+export function borderTrees(map: MidwayMap): Record<TreeRow, Point[]> {
+  const back: Point[] = [];
+  const left: Point[] = [];
+  for (let i = 0; i < map.width; i += 2)
+    back.push({ x: i + 0.5 + tileHash(i, 1) * 0.6, y: -1.4 - tileHash(i, 2) });
+  for (let i = 2; i < map.height; i += 2)
+    left.push({ x: -1.4 - tileHash(1, i), y: i + 0.5 + tileHash(2, i) * 0.6 });
+  return { back, left };
+}
+
+/** How high, in world pixels, the string lights hang where they meet a tree. */
+export const STRING_LIGHT_HEIGHT = 20;
+/** How far, in world pixels, the string lights sag in the middle of a span. */
+export const STRING_LIGHT_DROOP = 5;
+export const BULBS_PER_SPAN = 4;
+
+/** The height of the wire a fraction `s` of the way across a span. */
+export function stringLightHeight(s: number): number {
+  return STRING_LIGHT_HEIGHT - STRING_LIGHT_DROOP * 4 * s * (1 - s);
+}
+
+export interface Bulb extends Point {
+  /** World pixels above the ground. */
+  z: number;
+  row: TreeRow;
+}
+
+/** Where each bulb hangs on the strings of lights from tree to tree along both border rows. */
+export function stringLightBulbs(map: MidwayMap): Bulb[] {
+  const bulbs: Bulb[] = [];
+  const trees = borderTrees(map);
+  for (const row of ['back', 'left'] as const) {
+    const line = trees[row];
+    for (let i = 0; i + 1 < line.length; i++) {
+      const a = line[i];
+      const b = line[i + 1];
+      for (let k = 0; k < BULBS_PER_SPAN; k++) {
+        const s = (k + 0.5) / BULBS_PER_SPAN;
+        bulbs.push({
+          x: a.x + (b.x - a.x) * s,
+          y: a.y + (b.y - a.y) * s,
+          z: stringLightHeight(s),
+          row,
+        });
+      }
+    }
+  }
+  return bulbs;
+}
+
 /** Tile position to isometric screen pixels, relative to tile (0, 0)'s top corner. */
 export function toScreen(x: number, y: number): Point {
   return { x: ((x - y) * TILE_W) / 2, y: ((x + y) * TILE_H) / 2 };

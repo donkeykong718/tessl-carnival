@@ -22,7 +22,7 @@ function renderMidway() {
       <canvas class="midway-map" aria-label="The carnival midway. Walk up to a booth to play its game."></canvas>
       <p class="midway-help">
         <kbd>WASD</kbd> or <kbd>arrows</kbd> to walk, or click where you want to go.
-        <kbd>E</kbd> to play.
+        <kbd>E</kbd> to play. <kbd>N</kbd> for night or day.
       </p>
       <p class="midway-credit">
         Built with
@@ -42,6 +42,7 @@ function renderMidway() {
       <nav class="midway-guide" aria-label="Booths">
         <h2>Booths</h2>
         <ul></ul>
+        <button type="button" class="play night-toggle" style="margin-top: 10px; border: 0; font: inherit; font-weight: bold; cursor: pointer">Night</button>
       </nav>
       <div class="booth-card" aria-live="polite" hidden>
         <h2></h2>
@@ -82,11 +83,17 @@ function renderMidway() {
     if (game) link.href = `#/play/${game.id}`;
   };
 
+  const toggle = app.querySelector<HTMLButtonElement>('.night-toggle')!;
   const midway = startMidway(app.querySelector('canvas')!, {
     games: registry.all(),
     onPlay: (gameId) => (location.hash = `#/play/${gameId}`),
     onReach: showBooth,
+    onNight: (night) => {
+      // Labelled for what it switches to.
+      toggle.textContent = night ? 'Day' : 'Night';
+    },
   });
+  toggle.addEventListener('click', midway.toggleNight);
   stop = midway.stop;
 }
 
