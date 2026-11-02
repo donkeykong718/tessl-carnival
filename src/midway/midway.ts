@@ -1,4 +1,4 @@
-import { cloudOpacity, FADE_SECONDS, nightAmount, skyColors, stepFade } from './dusk';
+import { cloudOpacity, FADE_SECONDS, lightAmount, nightAmount, skyColors, stepFade } from './dusk';
 import { palette } from './palette';
 import {
   archBounds,
@@ -178,7 +178,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
       play(inReach);
     } else if (event.code === 'KeyN' && !isControl(event.target)) {
       event.preventDefault();
-      toggleNight();
+      // Holding N repeats the key; one press is one toggle.
+      if (!event.repeat) toggleNight();
     }
   };
   const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
@@ -333,7 +334,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     }
 
     const dark = nightAmount(fade);
-    drawStringLights(ctx, map, bulbs, dark);
+    const lit = lightAmount(fade);
+    drawStringLights(ctx, map, bulbs, lit);
 
     if (destination && player.path.length > 0) {
       const p = toScreen(Math.floor(destination.x) + 0.5, Math.floor(destination.y) + 0.5);
@@ -409,8 +411,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     drawBunting(ctx, map, t, visible);
     drawFloaters(ctx, floaters);
 
-    if (dark > 0) {
-      drawNight(ctx, map, bulbs, visible, t, calm ? 0 : 0.25, dark);
+    if (lit > 0) {
+      drawNight(ctx, map, bulbs, visible, t, calm ? 0 : 0.25, dark, lit);
       // Booth names go back on top of the night, so they stay readable.
       for (const sign of signs) sign();
     }

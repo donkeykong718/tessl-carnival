@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { cloudOpacity, FADE_SECONDS, mixColor, nightAmount, skyColors, stepFade } from './dusk';
+import {
+  cloudOpacity,
+  FADE_SECONDS,
+  lightAmount,
+  mixColor,
+  nightAmount,
+  skyColors,
+  stepFade,
+} from './dusk';
 import { palette } from './palette';
 
 describe('mixColor', () => {
@@ -42,8 +50,39 @@ describe('skyColors', () => {
   });
 });
 
+describe('lightAmount', () => {
+  it('lights the bulbs across the whole fade, from none to full', () => {
+    expect(lightAmount(0)).toBe(0);
+    expect(lightAmount(0.25)).toBe(0.25);
+    expect(lightAmount(0.5)).toBe(0.5);
+    expect(lightAmount(1)).toBe(1);
+  });
+
+  it('starts to light the moment the player switches to night, and to dim on the way back', () => {
+    const toNight = stepFade(0, true, FADE_SECONDS / 30);
+    expect(lightAmount(toNight)).toBeGreaterThan(0);
+    expect(lightAmount(toNight)).toBeLessThan(1);
+    const toDay = stepFade(1, false, FADE_SECONDS / 30);
+    expect(lightAmount(toDay)).toBeLessThan(1);
+    expect(lightAmount(toDay)).toBeGreaterThan(0);
+    expect(lightAmount(stepFade(toDay, false, FADE_SECONDS))).toBe(0);
+  });
+
+  it('turns round mid-fade without jumping', () => {
+    const part = stepFade(0, true, FADE_SECONDS * 0.4);
+    const back = stepFade(part, false, FADE_SECONDS * 0.1);
+    expect(lightAmount(back)).toBeCloseTo(0.3);
+  });
+
+  it('leaves the sky colours on their own timing', () => {
+    expect(skyColors(0.5)).toEqual({ sky: palette.sunsetSky, skyHigh: palette.sunsetSkyHigh });
+    expect(skyColors(1)).toEqual({ sky: palette.nightSky, skyHigh: palette.nightSky });
+    expect(palette.nightSky).toBe('#05040c');
+  });
+});
+
 describe('nightAmount and cloudOpacity', () => {
-  it('keeps the lights off until the sunset, then brings them in', () => {
+  it('keeps the dark wash off until the sunset, then brings it in', () => {
     expect(nightAmount(0)).toBe(0);
     expect(nightAmount(0.5)).toBe(0);
     expect(nightAmount(0.75)).toBe(0.5);
