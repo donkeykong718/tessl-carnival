@@ -1,3 +1,4 @@
+import { cloudOpacity, FADE_SECONDS, nightAmount, skyColors, stepFade } from './dusk';
 import { palette } from './palette';
 import {
   archBounds,
@@ -120,6 +121,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
   let destination: Point | undefined;
   const bulbs = stringLightBulbs(map);
   let night = false;
+  /** How far the sky has faded from day (0) to night (1). */
+  let fade = 0;
   const toggleNight = () => {
     night = !night;
     options.onNight?.(night);
@@ -281,25 +284,23 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     // The sky, and clouds drifting slowly behind the midway.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const horizon = (HORIZON - camera.y) * zoom;
-    if (night) {
-      ctx.fillStyle = palette.nightSky;
-    } else {
-      const sky = ctx.createLinearGradient(0, horizon - 260 * zoom, 0, horizon);
-      sky.addColorStop(0, palette.skyHigh);
-      sky.addColorStop(1, palette.sky);
-      ctx.fillStyle = sky;
-    }
+    const colors = skyColors(fade);
+    const sky = ctx.createLinearGradient(0, horizon - 260 * zoom, 0, horizon);
+    sky.addColorStop(0, colors.skyHigh);
+    sky.addColorStop(1, colors.sky);
+    ctx.fillStyle = sky;
     ctx.fillRect(0, 0, canvas.clientWidth, Math.max(0, horizon + 2));
 
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, 0, 0);
     const span = view.w + 200;
-    for (const cloud of night ? [] : clouds) {
+    const cloudiness = cloudOpacity(fade);
+    for (const cloud of cloudiness > 0 ? clouds : []) {
       const x =
         ((((cloud.x * span - camera.x * 0.3 + (calm ? 0 : t * cloud.speed)) % span) + span) %
           span) -
         100;
       const y = HORIZON - camera.y - 50 - cloud.y * 100;
-      drawCloud(ctx, x, y, cloud.size);
+      drawCloud(ctx, x, y, cloud.size, cloudiness);
     }
 
     // Snap the camera to whole device pixels so the pre-drawn ground stays crisp.
@@ -331,7 +332,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
       }
     }
 
-    drawStringLights(ctx, map, bulbs, night);
+    const dark = nightAmount(fade);
+    drawStringLights(ctx, map, bulbs, dark);
 
     if (destination && player.path.length > 0) {
       const p = toScreen(Math.floor(destination.x) + 0.5, Math.floor(destination.y) + 0.5);
@@ -407,8 +409,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     drawBunting(ctx, map, t, visible);
     drawFloaters(ctx, floaters);
 
-    if (night) {
-      drawNight(ctx, map, bulbs, visible, t, calm ? 0 : 0.25);
+    if (dark > 0) {
+      drawNight(ctx, map, bulbs, visible, t, calm ? 0 : 0.25, dark);
       // Booth names go back on top of the night, so they stay readable.
       for (const sign of signs) sign();
     }
@@ -464,6 +466,8 @@ export function startMidway(canvas: HTMLCanvasElement, options: MidwayOptions): 
     }
 
     updateFloaters(dt);
+    // Reduced motion skips the fade and switches at once.
+    fade = stepFade(fade, night, dt, calm ? 0 : FADE_SECONDS);
     updateCamera(dt);
     draw(time / 1000);
     frame = requestAnimationFrame(loop);
