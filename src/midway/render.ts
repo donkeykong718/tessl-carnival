@@ -1,5 +1,6 @@
 import { canvasFont, theme } from '../carnival';
 import bannerUrl from './aidevcon-banner.png';
+import { mixColor } from './dusk';
 import { palette } from './palette';
 import {
   borderTrees,
@@ -1700,7 +1701,8 @@ export interface Cloud {
   speed: number;
 }
 
-export function drawCloud(ctx: Ctx, x: number, y: number, size: number) {
+export function drawCloud(ctx: Ctx, x: number, y: number, size: number, opacity = 1) {
+  ctx.globalAlpha = opacity;
   ctx.fillStyle = palette.cloud;
   ctx.beginPath();
   ctx.roundRect(x - 30 * size, y - 8 * size, 60 * size, 12 * size, 6 * size);
@@ -1712,6 +1714,7 @@ export function drawCloud(ctx: Ctx, x: number, y: number, size: number) {
   ctx.beginPath();
   ctx.roundRect(x - 30 * size, y, 60 * size, 4 * size, 2 * size);
   ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 export interface Floater {
@@ -1797,8 +1800,9 @@ export function drawBoothSign(ctx: Ctx, slot: BoothSlot, name: string, t: number
 /**
  * The strings of lights hung from tree to tree along both border rows: a
  * drooping wire with a bulb every so often, dull glass by day and lit by night.
+ * `lit` runs from 0, unlit, to 1, fully lit.
  */
-export function drawStringLights(ctx: Ctx, map: MidwayMap, bulbs: readonly Bulb[], lit: boolean) {
+export function drawStringLights(ctx: Ctx, map: MidwayMap, bulbs: readonly Bulb[], lit: number) {
   const trees = borderTrees(map);
   ctx.strokeStyle = palette.wire;
   ctx.lineWidth = 0.6;
@@ -1816,7 +1820,7 @@ export function drawStringLights(ctx: Ctx, map: MidwayMap, bulbs: readonly Bulb[
     }
   }
   ctx.stroke();
-  ctx.fillStyle = lit ? palette.bulbLit : palette.bulbUnlit;
+  ctx.fillStyle = mixColor(palette.bulbUnlit, palette.bulbLit, lit);
   ctx.beginPath();
   for (const bulb of bulbs) {
     const [px, py] = at(bulb.x, bulb.y, bulb.z);
@@ -1857,7 +1861,8 @@ function onGround(ctx: Ctx, paint: () => void) {
 /**
  * Night over the whole midway: a dark wash, then the string lights' warm light
  * added back on top, brightest by the strings and spreading across the whole
- * carnival, with a glow round every bulb. `twinkle` is 0 for steady bulbs.
+ * carnival, with a glow round every bulb. `twinkle` is 0 for steady bulbs, and
+ * `amount` runs from 0, no night, to 1, full night.
  */
 export function drawNight(
   ctx: Ctx,
@@ -1866,7 +1871,9 @@ export function drawNight(
   view: Box,
   t: number,
   twinkle: number,
+  amount = 1,
 ) {
+  ctx.globalAlpha = amount;
   ctx.fillStyle = palette.nightWash;
   ctx.fillRect(view.left, view.top, view.right - view.left, view.bottom - view.top);
 
@@ -1906,7 +1913,7 @@ export function drawNight(
   bulbs.forEach((bulb, i) => {
     const [px, py] = at(bulb.x, bulb.y, bulb.z);
     if (px + HALO_RADIUS < view.left || px - HALO_RADIUS > view.right) return;
-    ctx.globalAlpha = 1 - twinkle * (0.5 + 0.5 * Math.sin(t * 3 + i * 2.3));
+    ctx.globalAlpha = amount * (1 - twinkle * (0.5 + 0.5 * Math.sin(t * 3 + i * 2.3)));
     ctx.drawImage(
       sprite,
       px - HALO_RADIUS,
