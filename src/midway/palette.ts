@@ -23,9 +23,9 @@ export const palette = {
   bulbLit: '#ffe6a3',
   wire: '#3a3530',
   /** The warm light the string lights cast at night, from strongest to none. */
-  glow: 'rgba(255, 196, 120, 0.9)',
-  glowNear: 'rgba(255, 168, 82, 0.34)',
-  glowFar: 'rgba(255, 150, 70, 0.16)',
+  glow: 'rgba(255, 196, 120, 0.81)',
+  glowNear: 'rgba(255, 168, 82, 0.306)',
+  glowFar: 'rgba(255, 150, 70, 0.144)',
   glowNone: 'rgba(255, 150, 70, 0)',
 
   grass: '#a5c43a',

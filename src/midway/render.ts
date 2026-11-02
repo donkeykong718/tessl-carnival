@@ -1861,8 +1861,9 @@ function onGround(ctx: Ctx, paint: () => void) {
 /**
  * Night over the whole midway: a dark wash, then the string lights' warm light
  * added back on top, brightest by the strings and spreading across the whole
- * carnival, with a glow round every bulb. `twinkle` is 0 for steady bulbs, and
- * `amount` runs from 0, no night, to 1, full night.
+ * carnival, with a glow round every bulb. `twinkle` is 0 for steady bulbs.
+ * `amount` is how dark the wash is and `light` how strong the glow is, each
+ * from 0, none, to 1, full night.
  */
 export function drawNight(
   ctx: Ctx,
@@ -1872,17 +1873,19 @@ export function drawNight(
   t: number,
   twinkle: number,
   amount = 1,
+  light = amount,
 ) {
   ctx.globalAlpha = amount;
   ctx.fillStyle = palette.nightWash;
   ctx.fillRect(view.left, view.top, view.right - view.left, view.bottom - view.top);
 
+  ctx.globalAlpha = light;
   ctx.globalCompositeOperation = 'lighter';
   const { width, height } = map;
-  // The light reaches everything on the ground and the rides above it, but not the sky.
+  // The light stays below the horizon, so the night sky stays dark right down to it.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(view.left, HORIZON - 60, view.right - view.left, view.bottom - HORIZON + 60);
+  ctx.rect(view.left, HORIZON, view.right - view.left, Math.max(0, view.bottom - HORIZON));
   ctx.clip();
   onGround(ctx, () => {
     // Light falling away from each row across the whole midway, never quite to nothing.
@@ -1913,7 +1916,7 @@ export function drawNight(
   bulbs.forEach((bulb, i) => {
     const [px, py] = at(bulb.x, bulb.y, bulb.z);
     if (px + HALO_RADIUS < view.left || px - HALO_RADIUS > view.right) return;
-    ctx.globalAlpha = amount * (1 - twinkle * (0.5 + 0.5 * Math.sin(t * 3 + i * 2.3)));
+    ctx.globalAlpha = light * (1 - twinkle * (0.5 + 0.5 * Math.sin(t * 3 + i * 2.3)));
     ctx.drawImage(
       sprite,
       px - HALO_RADIUS,

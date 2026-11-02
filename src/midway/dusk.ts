@@ -46,12 +46,20 @@ export function skyColors(fade: number): { sky: string; skyHigh: string } {
 }
 
 /**
- * How much of the night shows part way through the fade, from 0 to 1: the dark
- * wash, the lit bulbs and their glow. None until the sunset, then it comes in
- * as the sunset turns to night.
+ * How dark the night's wash is part way through the fade, from 0 to 1. None
+ * until the sunset, then it comes in as the sunset turns to night.
  */
 export function nightAmount(fade: number): number {
   return Math.max(0, Math.min(1, (fade - 0.5) / 0.5));
+}
+
+/**
+ * How lit the bulbs and their glow are part way through the fade, from 0 to 1.
+ * They follow the whole fade, so they start to light or dim the moment the
+ * midway switches, and are fully on or off as the fade ends.
+ */
+export function lightAmount(fade: number): number {
+  return Math.max(0, Math.min(1, fade));
 }
 
 /** How solid the clouds are part way through the fade: they thin out with the light. */
