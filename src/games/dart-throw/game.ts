@@ -4,22 +4,26 @@ const { width: WIDTH, height: HEIGHT } = theme.canvas;
 
 export const DARTS_PER_ROUND = 10;
 export const FLIGHT_TIME = 0.3;
-export const BALLOON_RADIUS = 22;
 export const POINTS = 10;
 export const BIG_POINTS = 30;
 /** Bonus for each dart left over when every balloon is popped. */
 export const BONUS_PER_DART = 20;
+/** Fewer balloons than darts, so a good round can clear the board and earn the bonus. */
+export const COLUMNS = 4;
+export const ROWS = 2;
+// Sizes scale with the theme's canvas, so the booth keeps its proportions if it changes.
+const SPACING = WIDTH / 8;
+export const BALLOON_RADIUS = SPACING * 0.35;
+const BOARD_TOP = HEIGHT / 5;
 /** How far, in pixels, the aim sways around the pointer. */
-export const SWAY = 30;
+export const SWAY = SPACING * 0.3;
 /** Radians per second of sway. */
 export const SWAY_SPEED = 2.5;
-export const THROWER = { x: WIDTH / 2, y: HEIGHT - 30 } as const;
-export const COLUMNS = 7;
-export const ROWS = 4;
-const SPACING = 64;
-const BOARD_TOP = 100;
+export const THROWER = { x: WIDTH / 2, y: HEIGHT - BALLOON_RADIUS } as const;
 /** The balloons worth BIG_POINTS, as `row,column`. */
-const BIG_BALLOONS = new Set(['0,1', '1,5', '2,3', '3,0', '3,6']);
+const BIG_BALLOONS = new Set(['0,1', '1,2']);
+/** The length of a dart, which the dart and crosshair drawings scale from. */
+const DART_LENGTH = BALLOON_RADIUS * 0.8;
 
 export interface Balloon {
   x: number;
@@ -138,17 +142,18 @@ export function step(state: DartThrowState, dt: number): void {
 }
 
 function drawDart(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  const length = DART_LENGTH * scale;
   ctx.strokeStyle = theme.colors.wood;
-  ctx.lineWidth = 3 * scale;
+  ctx.lineWidth = length / 6;
   ctx.beginPath();
   ctx.moveTo(x, y);
-  ctx.lineTo(x, y + 18 * scale);
+  ctx.lineTo(x, y + length);
   ctx.stroke();
   ctx.fillStyle = theme.colors.accent;
   ctx.beginPath();
-  ctx.moveTo(x, y + 12 * scale);
-  ctx.lineTo(x - 5 * scale, y + 20 * scale);
-  ctx.lineTo(x + 5 * scale, y + 20 * scale);
+  ctx.moveTo(x, y + length * 0.65);
+  ctx.lineTo(x - length * 0.28, y + length * 1.1);
+  ctx.lineTo(x + length * 0.28, y + length * 1.1);
   ctx.closePath();
   ctx.fill();
 }
@@ -181,7 +186,7 @@ function draw(
       ctx.fillStyle = balloon.points === BIG_POINTS ? colors.accent : colors.stripeA;
       ctx.globalAlpha = 0.5;
       ctx.beginPath();
-      ctx.arc(balloon.x, balloon.y, 5, 0, Math.PI * 2);
+      ctx.arc(balloon.x, balloon.y, BALLOON_RADIUS * 0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
       continue;
@@ -193,7 +198,13 @@ function draw(
     ctx.fillStyle = colors.stripeB;
     ctx.globalAlpha = 0.6;
     ctx.beginPath();
-    ctx.arc(balloon.x - 7, balloon.y - 8, 4, 0, Math.PI * 2);
+    ctx.arc(
+      balloon.x - BALLOON_RADIUS * 0.3,
+      balloon.y - BALLOON_RADIUS * 0.35,
+      BALLOON_RADIUS * 0.18,
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
     ctx.globalAlpha = 1;
   }
@@ -212,13 +223,14 @@ function draw(
   if (state.phase === 'playing') {
     const aim = aimPoint(state, pointer.x, pointer.y);
     ctx.strokeStyle = colors.text;
-    ctx.lineWidth = 2;
+    const reach = DART_LENGTH * 0.8;
+    ctx.lineWidth = DART_LENGTH / 9;
     ctx.beginPath();
-    ctx.arc(aim.x, aim.y, 8, 0, Math.PI * 2);
-    ctx.moveTo(aim.x - 14, aim.y);
-    ctx.lineTo(aim.x + 14, aim.y);
-    ctx.moveTo(aim.x, aim.y - 14);
-    ctx.lineTo(aim.x, aim.y + 14);
+    ctx.arc(aim.x, aim.y, reach * 0.55, 0, Math.PI * 2);
+    ctx.moveTo(aim.x - reach, aim.y);
+    ctx.lineTo(aim.x + reach, aim.y);
+    ctx.moveTo(aim.x, aim.y - reach);
+    ctx.lineTo(aim.x, aim.y + reach);
     ctx.stroke();
   }
 
@@ -301,6 +313,10 @@ export const dartThrow: CarnivalGame = {
 
     return () => {
       cancelAnimationFrame(frame);
+      // Leaving mid-round ends it: keep what the thrown darts earned.
+      if (!scoreRecorded && state.darts < DARTS_PER_ROUND) {
+        recordScore(dartThrow.id, state.score);
+      }
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerdown', onDown);
     };

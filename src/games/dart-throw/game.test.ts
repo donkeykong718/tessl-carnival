@@ -82,7 +82,7 @@ describe('dart throw', () => {
 
   it('lands the dart where the aim was when it was thrown', () => {
     const state = createState();
-    const balloon = state.balloons[10];
+    const balloon = state.balloons[5];
     const aim = aimPoint(state, balloon.x, balloon.y);
     throwDart(state, balloon.x - (aim.x - balloon.x), balloon.y - (aim.y - balloon.y));
     step(state, FLIGHT_TIME);
@@ -117,6 +117,22 @@ describe('dart throw', () => {
     expect(state.phase).toBe('over');
     expect(state.bonus).toBe(4 * BONUS_PER_DART);
     expect(state.score).toBe(state.balloons[0].points + 4 * BONUS_PER_DART);
+  });
+
+  it('can clear the board with darts to spare by throwing, and scores the bonus', () => {
+    const state = createState();
+    expect(state.balloons.length).toBeLessThan(DARTS_PER_ROUND);
+    let expected = 0;
+    for (const balloon of state.balloons) {
+      const aim = aimPoint(state, balloon.x, balloon.y);
+      throwDart(state, balloon.x - (aim.x - balloon.x), balloon.y - (aim.y - balloon.y));
+      step(state, FLIGHT_TIME);
+      expected += balloon.points;
+    }
+    const left = DARTS_PER_ROUND - state.balloons.length;
+    expect(state.phase).toBe('over');
+    expect(state.bonus).toBe(left * BONUS_PER_DART);
+    expect(state.score).toBe(expected + left * BONUS_PER_DART);
   });
 
   it('keeps playing while a dart is in the air', () => {
